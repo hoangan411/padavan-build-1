@@ -1,0 +1,67 @@
+name: build
+
+on:
+  push:
+  schedule:
+    - cron: 0 0 * * 6 # 每周六凌晨编译
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    env: 
+      source_dir: /opt/rt-n56u
+      images_dir: /opt/images
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+    - name: Initialization environment
+      run: |
+        sudo apt update
+        sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
+        fakeroot kmod cpio git python3-docutils gettext automake autopoint \
+        texinfo build-essential help2man pkg-config zlib1g-dev libgmp3-dev \
+        libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
+    - name: Clone source code
+      run: |
+        git clone --depth=1 https://github.com/hanwckf/rt-n56u.git $source_dir
+        cd $source_dir/
+        echo "last_sha=$(git rev-parse HEAD 2>/dev/null)" >> $GITHUB_ENV
+        echo "last_sha_short=$(git rev-parse --short=7 HEAD 2>/dev/null)" >> $GITHUB_ENV
+        echo "last_date=$(git log -1 --pretty='%cd' --date=format:'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+    - name: Prepare toolchain
+      run: |
+        cd $source_dir/toolchain-mipsel
+        ./clean_toolchain
+        ./build_toolchain
+    - name: Build Firmware
+      if: ${{ success() }}
+      run: |
+        mkdir -p $images_dir
+        cd $source_dir/trunk
+        targets=$(find $GITHUB_WORKSPACE/ -maxdepth 1 -type f -name '*.config')
+        for m in $targets; 
+        do
+          cp -f $m configs/templates/
+          m=${m##*/};
+          target=${m%%.*};
+
+          fakeroot ./build_firmware_modify $target;
+
+          if [ $? = 0 ]; then
+            cp -f images/*.trx ${images_dir}/;
+          else
+            exit 1;
+          fi
+
+          ./clear_tree >/dev/null 2>&1;
+        done
+    - name: Upload images to Releases
+      if: ${{ success() }}
+      uses: svenstaro/upload-release-action@2.2.0
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: ${{ env.images_dir }}/*.trx
+        tag: ${{ env.last_sha_short }}
+        overwrite: true
+        file_glob: true
+        body: "编译版本：[${{ env.last_sha }}](https://github.com/hanwckf/rt-n56u/tree/${{ env.last_sha }})\n更新时间：${{ env.last_date }}"
