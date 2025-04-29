@@ -23,7 +23,7 @@ jobs:
         libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
     - name: Clone source code
       run: |
-        git clone --depth=1 https://github.com/hanwckf/rt-n56u.git $source_dir
+        git clone --depth=1 https://github.com/hoangan411/rt-n56u.git $source_dir
         cd $source_dir/
         echo "last_sha=$(git rev-parse HEAD 2>/dev/null)" >> $GITHUB_ENV
         echo "last_sha_short=$(git rev-parse --short=7 HEAD 2>/dev/null)" >> $GITHUB_ENV
